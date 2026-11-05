@@ -703,7 +703,9 @@ test('remote-only: every local-gateway entry point fails before spawning or touc
 
     expect(() => mod.assertLocalRuntimeAvailable()).toThrow(/remote-only/)
     expect(() => mod.runGatewayEnsure({ command: 'hermes', args: ['gateway', 'ensure'] }, '.', '/h')).toThrow(/remote-only/)
-    expect(() => mod.createLocalGatewayDials()).toThrow(/remote-only/)
+    // main.ts builds the dial registry at module load; it must stay inert, not
+    // abort the process, on a remote-only artifact.
+    expect(() => mod.createLocalGatewayDials()).not.toThrow()
     await expect(mod.ensureLocalGateway(async () => ({ code: 0, stdout: '{}' }))).rejects.toThrow(/remote-only/)
     await expect(
       mod.redialLocalGateway({ ensure: async () => ({}), forget: () => {}, use: async () => 1 })
