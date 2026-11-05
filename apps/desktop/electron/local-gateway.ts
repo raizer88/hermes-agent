@@ -356,8 +356,11 @@ const VOICE_DIAL_PATHS = new Set(['/api/audio/speak-stream', '/api/audio/transcr
 // A plugin socket's native-http grant never enters a URL at all: main attaches
 // it as the header its REST twin sends, to that one dial only.
 export function createLocalGatewayDials() {
-  assertLocalRuntimeAvailable()
-
+  // Deliberately NOT guarded here: main.ts constructs the dial registry at
+  // module load (`const localGatewayDials = createLocalGatewayDials()`), so a
+  // throw would abort the process before the first window. The registry only
+  // reserves URLs; the functions that actually ensure, spawn or mint are the
+  // ones that refuse a remote-only artifact.
   const pending = new Map<string, { ticket: string; webContentsId: number; expires: number; origin: string; pathname: string; header: boolean }>()
 
   const reserve = (url: URL, ticket: string, webContentsId: number, header: boolean) => {
