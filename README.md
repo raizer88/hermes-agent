@@ -29,9 +29,11 @@ just the UI.
 
 ## Changes from upstream
 
-Base: upstream `main` at `b200f5bc60` (v0.22.7).
+Base: upstream `v0.23.0` (`2bd378ed1b`).
 Branch: `remote-only`. All changes live in `apps/desktop/electron/` plus the
 build driver; the core Python and `gateway/` are untouched.
+Rebased onto each new upstream release: the patch set is additive and touches
+only files upstream changes rarely.
 
 | # | Change | Where |
 |---|--------|-------|
@@ -51,7 +53,7 @@ The built artifact declares itself in `resources/install-stamp.json`:
 
 ```json
 {
-  "commit": "1c5cf25a6666f00edbf2f5cfd4b0327267cb35e0",
+  "commit": "ccebbba253f53fbf73ca8022b4280e454b732960",
   "dirty": false,
   "payload": "light",
   "updateMechanism": "external"
@@ -89,7 +91,7 @@ Electron runtime, ~430 MB). Output:
 apps\desktop\release\win-unpacked\hermes-light-<short-sha>.exe
 ```
 
-For the commit above that is `hermes-light-1c5cf25.exe` (about 246 MB).
+For the commit above that is `hermes-light-ccebbba.exe` (about 236 MB).
 
 It is **portable**: launch it from the folder. Nothing is installed and nothing
 is signed, so Windows SmartScreen will warn on first launch. The build asks
