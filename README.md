@@ -29,7 +29,7 @@ just the UI.
 
 ## Changes from upstream
 
-Base: upstream `v0.23.0` (`2bd378ed1b`).
+Base: upstream `v0.23.2` (`ae2a81ccc0`).
 Branch: `remote-only`. All changes live in `apps/desktop/electron/` plus the
 build driver; the core Python and `gateway/` are untouched.
 Rebased onto each new upstream release: the patch set is additive and touches
@@ -53,9 +53,11 @@ The built artifact declares itself in `resources/install-stamp.json`:
 
 ```json
 {
-  "commit": "ccebbba253f53fbf73ca8022b4280e454b732960",
+  "commit": "9b1e875feeafa7f8262f15a863a097ade4571fac",
   "dirty": false,
   "payload": "light",
+  "baseVersion": "0.23.2",
+  "displayVersion": "0.23.2",
   "updateMechanism": "external"
 }
 ```
@@ -66,6 +68,8 @@ Prerequisites:
 
 - Python **3.11–3.14** on `PATH`;
 - Node **26** (the repo's `.npmrc` sets `engine-strict=true`);
+- **pnpm 12.15.0** exactly (`pm/lock.json`; `npm` is refused by the root
+  `preinstall` and `engines.npm`);
 - a **clean** checkout — the driver refuses a dirty tree and later re-checks
   that `HEAD` is still the admitted commit.
 
@@ -73,7 +77,7 @@ Prerequisites:
 git clone https://github.com/raizer88/hermes-agent.git
 cd hermes-agent
 git checkout remote-only
-npm ci
+pnpm install --frozen-lockfile
 python scripts\bundles\desktop.py --commit (git rev-parse HEAD) --variant light --clean
 ```
 
@@ -83,15 +87,26 @@ Or, with the wrapper script:
 scripts\build-bundle.ps1 -Variant light
 ```
 
+### Build it with an agent
+
+If you work with an LLM coding agent, point it at [`AGENTS.md`](AGENTS.md): the
+last section, *"This fork: building the remote-only desktop client"*, is a
+self-contained runbook — prerequisites, the two build paths, how to swap the
+folder without breaking a running app, the checks that prove the artifact is
+genuinely remote-only, and the traps that have already cost someone an afternoon
+(low-integrity files, `ELECTRON_RUN_AS_NODE`, native pnpm, `.ps1` encoding). Hand
+it the line *"read AGENTS.md and build the remote-only client"* and it has
+everything it needs.
+
 The light variant skips the TUI/web payload assembly, which is why it is much
 smaller than a bundled build (the packaged folder is still dominated by the
-Electron runtime, ~430 MB). Output:
+Electron runtime, ~426 MB). Output:
 
 ```
 apps\desktop\release\win-unpacked\hermes-light-<short-sha>.exe
 ```
 
-For the commit above that is `hermes-light-ccebbba.exe` (about 236 MB).
+For the current build that is `hermes-light-9b1e875.exe` (about 235 MB).
 
 It is **portable**: launch it from the folder. Nothing is installed and nothing
 is signed, so Windows SmartScreen will warn on first launch. The build asks

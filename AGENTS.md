@@ -170,3 +170,115 @@ per variant and a name → variant table (`tools/environments/`, its table still
 | `providers/` | `providers/README.md` | `ProviderProfile` registry and ABC |
 
 PR workflow: `CONTRIBUTING.md` (maintainers: the `hermes-agent-dev` skill, not shipped here).
+
+---
+
+## This fork: building the remote-only desktop client
+
+Everything above describes upstream. This repository is a personal fork whose only
+build product is the desktop **`light`** (remote-only) variant, from branch
+`remote-only`, based on upstream **v0.23.2** (`ae2a81ccc0`). Nothing below applies
+to upstream's release lanes: no payload, no installer, no signed artifact.
+
+### What the build produces
+
+`python scripts/bundles/desktop.py --commit <sha> --variant light --clean` writes
+the portable folder `apps/desktop/release/win-unpacked`: an Electron app with no
+Python payload that can talk only to a remote Hermes gateway.
+`resources/install-stamp.json` must read `payload: "light"`,
+`source: "commit-build"`, `dirty: false`.
+
+### Host prerequisites (Windows)
+
+- Python 3.11–3.14 on `PATH`.
+- Node **26+**. With fnm the binary is under
+  `%APPDATA%\fnm\node-versions\v26.13.0\installation` — put that folder first on
+  `PATH` (`EBADENGINE` otherwise, because `.npmrc` sets `engine-strict=true`).
+- **pnpm 12.15.0 exactly** (`pm/lock.json`). Either the native `pnpm.exe` or the
+  npm distribution, whose `pnpm.cmd` runs `node_modules/pnpm/bin/pnpm.mjs`.
+  If a native pnpm starts but dies oddly (thread stack overflow, store lock
+  "Accesso negato"), that is a host problem, not a repo problem: force the Node
+  CLI with `HERMES_PNPM_CLI=1`. The driver also downloads its own pinned Node and
+  pnpm into `.cache/desktop-inputs`; that is expected.
+- ~10 GB free for the checkout, `node_modules`, the Electron download and the
+  packaged app.
+- Network for the clone, the pnpm store and Electron. Where schannel fails
+  (`SEC_E_NO_CREDENTIALS`), use `git -c http.sslBackend=openssl`.
+
+### Build
+
+From a checkout of this branch:
+
+```powershell
+git clone https://github.com/raizer88/hermes-agent.git
+cd hermes-agent
+git checkout remote-only
+pnpm install --frozen-lockfile
+python scripts/bundles/desktop.py --commit (git rev-parse HEAD) --variant light --clean
+```
+
+`scripts\build-bundle.ps1 -Variant light` does the same from inside the repo. The
+author's `rebuild\rebuild-light.ps1` (preflight with `-DryRun`, scratch clone,
+`win-unpacked.new`) is a companion file kept next to the built app, **not in this
+repository**.
+
+`--commit` wants the **full 40-character** SHA of the checkout's `HEAD`, and the
+tree must be clean: the driver re-checks both while building. Never use `npm`
+(upstream refuses it) and never run `hermes update` here: it resets the tree to
+`origin/main` and drops every fork commit.
+
+PowerShell scripts must stay **ASCII-only**: Windows PowerShell 5.1 reads
+BOM-less files as ANSI, so one em dash breaks parsing. If the execution policy
+blocks `.ps1`, call it as
+`powershell -NoProfile -ExecutionPolicy Bypass -File <script>`.
+
+### Install the result
+
+A running `hermes-light-*.exe` locks `resources\app.asar`: close every such
+process first. Move the **folder**, never the exe alone:
+
+```powershell
+Remove-Item .\win-unpacked -Recurse -Force
+Move-Item .\win-unpacked.new .\win-unpacked
+```
+
+The app's userData is per commit (`%APPDATA%\HermesLightCommit<sha>`). Copy
+`connection.json`/`connections.json` and the sign-in state from the previous
+build, or the user has to sign in again. Then repoint
+`HKCU\Software\Classes\hermes\shell\open\command` and any Desktop or Start Menu
+shortcut at the new exe.
+
+### Verify before reporting success
+
+- `resources/install-stamp.json`: `payload: "light"`, `dirty: false`, `commit` =
+  the SHA you built, `baseVersion` = the upstream release this fork is based on
+  (currently `0.23.2`) — **never `0.0.0`**.
+- `resources/` contains no Python payload.
+- `%LOCALAPPDATA%\hermes\logs\desktop.log` shows
+  `[boot] Remote Hermes backend is ready` and
+  `[updates] remote-only: latest release is vX (this build is <baseVersion>)`.
+- No new `python.exe`, and the profile rail shows no "This device".
+- Launch the exe with `ELECTRON_RUN_AS_NODE` **unset**; with it set, Electron runs
+  as plain Node and the process exits silently.
+
+### Traps already paid for
+
+- **Integrity labels.** On a host whose workspace is sandboxed, files can carry a
+  *Low* mandatory label. The exe then starts at low integrity and dies with
+  `0x80000003` (crashpad "not connected"). That is not a build defect: repair the
+  folder with `icacls .\win-unpacked /setintegritylevel "(OI)(CI)M" /T /C /Q`.
+- `createLocalGatewayDials()` must stay inert: `main.ts` builds the registry at
+  module load, so a throw there kills the process before the window exists.
+- `bootstrapFailure` is global and latched: on `light` a refusal must not assign
+  it, or the primary remote connection goes down too.
+- An unsigned MSIX cannot be installed; light builds use `--win --dir`.
+- `git apply --3way` leaves the patches uncommitted and `HEAD` on the tag: use
+  `git am --3way`, since the patches are `format-patch` output.
+- `project.version` in `pyproject.toml` is what a `--commit` build reports
+  (`scripts/releases/commit_build.py::version_at`). Number it from the upstream
+  base and amend it on every rebase: at `0.0.0` every release looks newer and the
+  About banner never turns off.
+
+Report the commit you built, the stamp fields and the log lines, plus anything you
+could not verify. Do not claim "built and working" without the stamp and the boot
+log.
