@@ -310,7 +310,7 @@ export async function redialLocalGateway<TEndpoint, TResult>(deps: {
 
 /** A fresh one-use local dial: mint `purpose` for the routed profile's home and hand it to
  *  `prepare`, re-ensuring once when the cached owner is gone (`redialLocalGateway`). */
-export function localGatewayDial<T extends { baseUrl: string; gatewayEndpoint?: GatewayEndpoint }>(opts: {
+export async function localGatewayDial<T extends { baseUrl: string; gatewayEndpoint?: GatewayEndpoint }>(opts: {
   ensure: () => Promise<T>
   forget: () => Promise<void> | void
   launchHome: string
@@ -319,6 +319,10 @@ export function localGatewayDial<T extends { baseUrl: string; gatewayEndpoint?: 
   profile: string
   purpose?: 'interactive' | 'native-http'
 }): Promise<string> {
+  // `async` is load-bearing: on a remote-only artifact the guard below must
+  // answer as a rejection. As a plain function returning a promise it threw
+  // synchronously, so a caller that only attaches `.catch()` took an unhandled
+  // exception instead of a handled failure.
   assertLocalRuntimeAvailable()
 
   const { mint = mintLocalGatewayTicket, purpose = 'interactive' } = opts

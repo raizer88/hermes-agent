@@ -710,7 +710,7 @@ test('remote-only: every local-gateway entry point fails before spawning or touc
     await expect(
       mod.redialLocalGateway({ ensure: async () => ({}), forget: () => {}, use: async () => 1 })
     ).rejects.toThrow(/remote-only/)
-    expect(() => mod.localGatewayDial({ ensure: async () => ({ baseUrl: '' }), forget: () => {}, launchHome: '/h', prepare: (url) => url, profile: 'default' })).toThrow(/remote-only/)
+    await expect(mod.localGatewayDial({ ensure: async () => ({ baseUrl: '' }), forget: () => {}, launchHome: '/h', prepare: (url) => url, profile: 'default' })).rejects.toThrow(/remote-only/)
     await expect(mod.mintLocalGatewayTicket(endpoint)).rejects.toThrow(/remote-only/)
     await expect(mod.runGatewayOwnerRestart(async () => ({ code: 0, stdout: '', stderr: '' }), 'default')).rejects.toThrow(/remote-only/)
   } finally {
