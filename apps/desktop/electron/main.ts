@@ -5113,7 +5113,7 @@ async function ensureRuntime(
     rememberLog('[bootstrap] REFUSING installer on a remote-only (light) artifact')
 
     const remoteOnlyError: Error & { isBootstrapFailure?: boolean } = new Error(
-      'Questa build è remote-only: non ha un runtime locale. Aggiungi il gateway remoto in Impostazioni → Gateways.'
+      'This is a remote-only Hermes Desktop build: it has no local runtime. Add the remote gateway in Settings → Gateways.'
     )
 
     remoteOnlyError.isBootstrapFailure = true
