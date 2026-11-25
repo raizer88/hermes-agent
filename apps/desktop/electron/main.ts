@@ -4414,6 +4414,15 @@ async function handOffWindowsBootstrapRecovery(reason) {
     return false
   }
 
+  // A remote-only (light) artifact owns no local runtime either: there is no
+  // install tree for the updater to heal, and the remote gateway is the only
+  // backend it has. Refuse before spawning anything.
+  if (installShape() === 'light') {
+    rememberLog('[bootstrap] refusing updater recovery hand-off on a remote-only artifact')
+
+    return false
+  }
+
   const updater = resolveUpdaterBinary()
 
   if (!updater) {
@@ -14189,6 +14198,16 @@ ipcMain.handle('hermes:bootstrap:repair', async (): Promise<{ ok: boolean; bundl
     rememberLog('[bootstrap] repair refused on a bundled install; repair means reinstalling the app')
 
     return { ok: false, error: 'bundled-immutable' }
+  }
+
+  // A remote-only (light) artifact has no local runtime: "repair" would take the
+  // checkout branch, clear the latched failure and force a reinstall of a tree
+  // that does not exist, dropping the primary remote connection for nothing.
+  // Refuse before bootstrapRepairAttempt moves, like the bundled case.
+  if (installShape() === 'light') {
+    rememberLog('[bootstrap] repair refused on a remote-only artifact; there is no local runtime to repair')
+
+    return { ok: false, error: 'remote-only' }
   }
 
   // Forceful repair: force the next startHermes() through the full installer
