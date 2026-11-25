@@ -7,8 +7,10 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   compareVersions,
   createRemoteOnlyUpdateChecker,
+  isKnownReleaseVersion,
   isNewerVersion,
   parseReleaseTag,
+  REMOTE_ONLY_PLACEHOLDER_VERSION,
   REMOTE_ONLY_RELEASES_URL
 } from './remote-only-update-check'
 
@@ -65,6 +67,14 @@ describe('compareVersions', () => {
     expect(isNewerVersion('v0.22.7', '0.22.7')).toBe(false)
     expect(isNewerVersion(null, '0.22.7')).toBe(false)
   })
+
+  test('isKnownReleaseVersion rejects the source placeholder and non-semver strings', () => {
+    expect(isKnownReleaseVersion(REMOTE_ONLY_PLACEHOLDER_VERSION)).toBe(false)
+    expect(isKnownReleaseVersion('git.018a2ec')).toBe(false)
+    expect(isKnownReleaseVersion('')).toBe(false)
+    expect(isKnownReleaseVersion('0.23.2')).toBe(true)
+    expect(isKnownReleaseVersion('0.23.2+canary.20261120T064609Z')).toBe(true)
+  })
 })
 
 describe('createRemoteOnlyUpdateChecker', () => {
@@ -118,6 +128,21 @@ describe('createRemoteOnlyUpdateChecker', () => {
     })
 
     await expect(checker.check({ force: true })).resolves.toMatchObject({ latest: 'v0.23.0', newer: true })
+  })
+
+  test('a placeholder running version reports unknown instead of an update', async () => {
+    const file = await cachePath()
+    const checker = createRemoteOnlyUpdateChecker({
+      currentVersion: REMOTE_ONLY_PLACEHOLDER_VERSION,
+      cachePath: file,
+      fetch: redirectTo('https://github.com/NousResearch/hermes-agent/releases/tag/v0.23.4') as unknown as typeof fetch,
+      now: () => 1_000
+    })
+
+    const status = await checker.check()
+
+    expect(status).toMatchObject({ currentKnown: false, latest: 'v0.23.4', newer: false, supported: true })
+    expect(status.releaseUrl).toBe(`${REMOTE_ONLY_RELEASES_URL}/tag/v0.23.4`)
   })
 
   test('an expired cache is refreshed', async () => {

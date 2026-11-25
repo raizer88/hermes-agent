@@ -20,6 +20,12 @@ export interface RemoteOnlyUpdateStatus {
   /** False on every artifact that is not light: only remote-only builds use this check. */
   supported: boolean
   current: string
+  /**
+   * False when `current` is not a release number (0.0.0 from a source tree, or
+   * a non-semver string). Comparing against it would be meaningless, so the
+   * status never claims an update in that case.
+   */
+  currentKnown: boolean
   latest: string | null
   newer: boolean
   releaseUrl: string
@@ -133,6 +139,20 @@ export function isNewerVersion(latest: string | null, current: string): boolean 
   return latest ? compareVersions(latest, current) > 0 : false
 }
 
+/** Source trees carry this placeholder; a build that still does is not a release. */
+export const REMOTE_ONLY_PLACEHOLDER_VERSION = '0.0.0'
+
+/** True when `value` names a release and can be compared against a release tag. */
+export function isKnownReleaseVersion(value: string): boolean {
+  const parsed = parseVersion(value)
+
+  if (!parsed) {
+    return false
+  }
+
+  return !(parsed.major === 0 && parsed.minor === 0 && parsed.patch === 0 && parsed.prerelease.length === 0)
+}
+
 export interface RemoteOnlyUpdateCheckerDeps {
   currentVersion: string
   /** Where the last answer is cached; inside `app.getPath('userData')`. */
@@ -178,11 +198,17 @@ export function createRemoteOnlyUpdateChecker(deps: RemoteOnlyUpdateCheckerDeps)
   }
 
   function status(latest: string | null, checkedAt: number, error?: string): RemoteOnlyUpdateStatus {
+    const currentKnown = isKnownReleaseVersion(deps.currentVersion)
+
     return {
       supported: true,
       current: deps.currentVersion,
+      currentKnown,
       latest,
-      newer: isNewerVersion(latest, deps.currentVersion),
+      // Without a known running version there is nothing honest to compare:
+      // claiming an update would light the banner on every build, including the
+      // one that already is the newest release.
+      newer: currentKnown && isNewerVersion(latest, deps.currentVersion),
       releaseUrl: latest ? `${REMOTE_ONLY_RELEASES_URL}/tag/${encodeURIComponent(latest)}` : REMOTE_ONLY_RELEASES_URL,
       checkedAt,
       ...(error ? { error } : {})
@@ -212,7 +238,10 @@ export function createRemoteOnlyUpdateChecker(deps: RemoteOnlyUpdateCheckerDeps)
 
         const checkedAt = now()
         await writeCache(latest, checkedAt)
-        log(`[updates] remote-only: latest release is ${latest} (this build is ${deps.currentVersion})`)
+        log(
+          `[updates] remote-only: latest release is ${latest} ` +
+            `(this build is ${deps.currentVersion}${isKnownReleaseVersion(deps.currentVersion) ? '' : ', version unknown; not comparing'})`
+        )
 
         return status(latest, checkedAt)
       } catch (error) {

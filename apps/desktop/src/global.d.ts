@@ -1010,6 +1010,8 @@ export interface DesktopRemoteOnlyUpdateStatus {
   /** False on every artifact that is not the light variant. */
   supported: boolean
   current: string
+  /** False when `current` is a placeholder (0.0.0), so nothing can be compared. */
+  currentKnown: boolean
   latest: string | null
   newer: boolean
   releaseUrl: string
