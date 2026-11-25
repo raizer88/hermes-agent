@@ -26,14 +26,46 @@ export function pnpmCommand({ env = process.env } = {}) {
   throw new Error('pnpm is required on PATH')
 }
 
+// The npm distribution of pnpm is a Node CLI (`bin/pnpm.mjs`, reached through
+// pnpm.cmd), not the native binary. Windows hosts without the native package
+// have only that, and a native binary that cannot start looks present until it
+// runs, so the published layout is accepted as a second source.
+function pnpmCli({ env }) {
+  const candidates = []
+  for (const dir of (env.PATH || env.Path || '').split(delimiter)) {
+    if (dir) candidates.push(join(dir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs'))
+  }
+  const running = env.npm_execpath
+  if (running) candidates.push(join(dirname(running), 'pnpm.mjs'), join(dirname(running), 'pnpm.cjs'))
+  return candidates.find(candidate => existsSync(candidate)) ?? null
+}
+
+/** How to run pnpm here: a file plus the arguments that must precede its own. */
+export function pnpmInvocation({ env = process.env } = {}) {
+  // Some Windows hosts carry a native pnpm that starts but cannot finish: it
+  // overflows its stack or is denied its store lock, where the same release run
+  // as the Node CLI works. HERMES_PNPM_CLI=1 asks for that CLI explicitly.
+  const cli = pnpmCli({ env })
+  if (env.HERMES_PNPM_CLI === '1' && cli) return { exec: process.execPath, prefix: [cli] }
+  let native = null
+  try {
+    native = pnpmCommand({ env })
+  } catch {
+    // No native binary on PATH: fall through to the Node CLI.
+  }
+  if (native) return { exec: native, prefix: [] }
+  if (cli) return { exec: process.execPath, prefix: [cli] }
+  throw new Error('pnpm is required on PATH')
+}
+
 // The native package ships its manifest beside the executable: no child spawn,
 // which runs before the reuse short-circuit. Layouts without one (Nix) fall back
 // to asking pnpm.
-function pnpmVersion(pnpm, { source, env }) {
+function pnpmVersion({ exec, prefix }, { source, env }) {
   try {
-    return JSON.parse(readFileSync(join(dirname(realpathSync(pnpm)), 'package.json'), 'utf8')).version
+    return JSON.parse(readFileSync(join(dirname(realpathSync(exec)), 'package.json'), 'utf8')).version
   } catch {
-    return execFileSync(pnpm, ['--version'], { cwd: source, env, encoding: 'utf8' }).trim()
+    return execFileSync(exec, [...prefix, '--version'], { cwd: source, env, encoding: 'utf8' }).trim()
   }
 }
 
@@ -228,13 +260,13 @@ function dependencyInputs({ source, workspaces, env, nativeToolchain, electron }
   }))].sort()
   const prepareElectron = electron && selected.includes('apps/desktop')
     && Boolean(JSON.parse(readFileSync(join(source, 'apps/desktop/package.json'), 'utf8')).devDependencies?.electron)
-  const pnpm = pnpmCommand({ env })
+  const pnpm = pnpmInvocation({ env })
   const version = pnpmVersion(pnpm, { source, env })
   // pnpm never checks its own version here (pmOnFail: ignore keeps the lock one YAML
   // document): PM's pin is the one this checkout's lockfile was written with.
   const pinned = pinnedPnpm(source)
   if (pinned !== version) {
-    throw new Error(`pnpm ${pinned} is required (pm/lock.json), found ${version} at ${pnpm}`)
+    throw new Error(`pnpm ${pinned} is required (pm/lock.json), found ${version} at ${pnpm.exec}`)
   }
   // The root project is always installed with a filtered install. The release-age
   // policy is enforced where the lockfile is written (CI), not re-fetched per user.
@@ -293,7 +325,7 @@ export function prepareNodeDependencies({ source, workspaces, env = process.env,
     try {
       console.log(`node-deps: installing workspace dependencies with pnpm (${selected.join(', ')})...`)
       lock.check()
-      lock.run(pnpm, args, { cwd: source, env })
+      lock.run(pnpm.exec, [...pnpm.prefix, ...args], { cwd: source, env })
       if (!installedLockMatches(lockText, installedLock, selected)) {
         throw new Error(`pnpm did not record the locked install of ${selected.join(', ')} in ${installedLock}`)
       }
@@ -339,7 +371,8 @@ export function prepareNodeDependencies({ source, workspaces, env = process.env,
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   // The Python bundle driver uses this same resolver, not a second layout probe.
   if (process.argv[2] === '--pnpm') {
-    const child = spawnSync(pnpmCommand(), process.argv.slice(3), { stdio: 'inherit' })
+    const { exec, prefix } = pnpmInvocation()
+    const child = spawnSync(exec, [...prefix, ...process.argv.slice(3)], { stdio: 'inherit' })
     if (child.error) throw child.error
     process.exit(child.status ?? 1)
   }
