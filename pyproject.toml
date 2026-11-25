@@ -4,7 +4,14 @@
 
 [project]
 name = "hermes-agent"
-version = "0.0.0"
+# Upstream keeps 0.0.0 here and numbers release builds from a tag. This fork
+# only ever builds the remote-only (light) variant from a commit, and
+# scripts/releases/commit_build.py::version_at reads this field as the build's
+# version, so the placeholder reached the app, the install stamp and the update
+# banner (0.0.0 is older than every release, so the banner never turned off).
+# Number it from the upstream release the fork is based on: bump it when the
+# fork is rebased (see rebuild/README.md).
+version = "0.23.2"
 description = "The self-improving AI agent — creates skills from experience, improves them during use, and runs anywhere"
 readme = "README.md"
 # 3.14 is the newest python we know we have wheels for.
