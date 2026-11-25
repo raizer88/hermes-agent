@@ -18,6 +18,7 @@ import {
   $updateChecking,
   $updateStatus,
   checkBackendUpdates,
+  checkRemoteOnlyUpdate,
   checkUpdates,
   openUpdateOverlayFor,
   startActiveUpdate,
@@ -371,6 +372,10 @@ function UpdateStatusCardBody({
 
   const handleCheck = async (): Promise<void> => {
     setJustChecked(false)
+    // A check the user asks for is the one place the remote-only release lookup
+    // must bypass its 12 h cache: otherwise the About banner can never be
+    // refreshed by hand. It is a no-op on artifacts that are not light.
+    void checkRemoteOnlyUpdate({ force: true })
     const next = await (isBackend ? checkBackendUpdates({ force: true }) : checkUpdates({ force: true }))
     setJustChecked(Boolean(next))
   }
