@@ -335,6 +335,7 @@ import type { InstallStamp } from './install-stamp'
 import { createKeepAwakeController } from './keep-awake-controller'
 import {
   createRemoteOnlyUpdateChecker,
+  isKnownReleaseVersion,
   REMOTE_ONLY_RELEASES_URL,
   type RemoteOnlyUpdateStatus
 } from './remote-only-update-check'
@@ -16934,6 +16935,7 @@ ipcMain.handle(
       return {
         supported: false,
         current: app.getVersion(),
+        currentKnown: isKnownReleaseVersion(app.getVersion()),
         latest: null,
         newer: false,
         releaseUrl: REMOTE_ONLY_RELEASES_URL,
